@@ -1,23 +1,25 @@
-# DQN Car Navigation
+# 🚗 DQN Car Navigation
 
 2D Deep Q-Network car-navigation simulation with curriculum learning, tester-stage validation, real-time visualization, and checkpoint utilities.
 
+> 🧠 Train a car agent, 📊 validate it with tester stages, and 🎮 inspect behavior in real time.
+
 Created and developed by **Richky Abednego**.
 
-## Overview
+## ✨ Overview
 
 This project trains a car agent to drive through a three-lane road using sensor input, decision-interval control, and staged obstacle layouts. The codebase separates the runtime modules, visualization flow, and a small curated test suite so the repository stays easier to maintain in production.
 
-## Main Features
+## 🔥 Main Features
 
-- DQN training with replay buffer, target network, and configurable memory size.
-- Curriculum-based obstacle stages for progressive learning.
-- Tester-stage validation using `TEST_OBSTACLES` before accepting model progress.
-- Real-time pygame visualization with manual mode, all-stage mode, experiment mode, and speed test mode.
-- Model-cleaning utility to re-check saved `.pth` files and remove failed checkpoints.
-- Centralized tuning and simulation constants in [`main_constant.py`](./main_constant.py).
+- 🧠 DQN training with replay buffer, target network, and configurable memory size.
+- 📚 Curriculum-based obstacle stages for progressive learning.
+- ✅ Tester-stage validation using `TEST_OBSTACLES` before accepting model progress.
+- 🎮 Real-time pygame visualization with manual mode, all-stage mode, experiment mode, and speed test mode.
+- 🧹 Model-cleaning utility to re-check saved `.pth` files and remove failed checkpoints.
+- ⚙️ Centralized tuning and simulation constants in [`main_constant.py`](./main_constant.py).
 
-## Repository Layout
+## 🗂️ Repository Layout
 
 - `main_constant.py`: simulation constants, reward tuning, sensor settings, and obstacle stages.
 - `main_environment.py`: environment dynamics, sensors, reward logic, and done conditions.
@@ -30,7 +32,7 @@ This project trains a car agent to drive through a three-lane road using sensor 
 - `NOTES/`: short practical usage guides and copy-ready command examples.
 - `test_*.py`: curated regression checks for environment, training helpers, and visualization helpers.
 
-## Setup
+## ⚙️ Setup
 
 ```bash
 python -m venv .venv
@@ -40,7 +42,7 @@ pip install -r requirements.txt
 
 Python 3.10+ is recommended.
 
-## Quick Start
+## 🚀 Quick Start
 
 Train a new model:
 
@@ -72,9 +74,9 @@ Run the curated tests:
 python -m unittest discover -p "test_*.py" -v
 ```
 
-## CLI Highlights
+## 🧪 CLI Highlights
 
-### Training
+### 🏋️ Training
 
 ```bash
 python main_train.py --episodes 500
@@ -87,7 +89,7 @@ python main_train.py --episodes 1000 --continuous 5
 python main_train.py --fine-tune-memory --tune-episodes 200 --tune-runs 3
 ```
 
-### Visualization
+### 👀 Visualization
 
 ```bash
 python main_visualize.py --model models\\model_stage1A.pth --episodes 10
@@ -99,7 +101,7 @@ python main_visualize.py --speedtest
 python main_visualization.py --episodes 5
 ```
 
-### Model Utility
+### 🧹 Model Utility
 
 ```bash
 python func_cleanmodel.py --models-dir models
@@ -107,20 +109,20 @@ python func_cleanmodel.py --models-dir models --max-steps 4000
 python func_cleanmodel.py --models-dir models --dry-run
 ```
 
-## Outputs
+## 📦 Outputs
 
-- New training runs create checkpoints and CSV logs under `models/` unless you change the save target in code.
-- Visualization runs create CSV logs under `visualize_logs/`.
-- Fine-tuning runs create result folders under `tuning/`.
-- Archived experiment outputs already stored in `ALL_MODELS/` are kept as reference material.
+- 💾 New training runs create checkpoints and CSV logs under `models/` unless you change the save target in code.
+- 📈 Visualization runs create CSV logs under `visualize_logs/`.
+- 🧪 Fine-tuning runs create result folders under `tuning/`.
+- 🗃️ Archived experiment outputs already stored in `ALL_MODELS/` are kept as reference material.
 
-## Notes
+## 📝 Notes
 
-- Main tuning and scenario changes should be done from [`main_constant.py`](./main_constant.py).
-- `main_visualization.py` is only a wrapper alias for `main_visualize.py`.
-- The curated tests intentionally focus on core behavior instead of keeping many overlapping test files.
-- More short usage docs are available in [`NOTES/HowToTrain.md`](./NOTES/HowToTrain.md), [`NOTES/HowToUseModel.md`](./NOTES/HowToUseModel.md), [`NOTES/Functionalities.md`](./NOTES/Functionalities.md), and [`NOTES/quickcopy.txt`](./NOTES/quickcopy.txt).
+- 🎯 Main tuning and scenario changes should be done from [`main_constant.py`](./main_constant.py).
+- 🔁 `main_visualization.py` is only a wrapper alias for `main_visualize.py`.
+- 🧪 The curated tests intentionally focus on core behavior instead of keeping many overlapping test files.
+- 📚 More short usage docs are available in [`NOTES/HowToTrain.md`](./NOTES/HowToTrain.md), [`NOTES/HowToUseModel.md`](./NOTES/HowToUseModel.md), [`NOTES/Functionalities.md`](./NOTES/Functionalities.md), and [`NOTES/quickcopy.txt`](./NOTES/quickcopy.txt).
 
-## Credit
+## 👨‍💻 Credit
 
 Creator and primary developer: **Richky Abednego**
