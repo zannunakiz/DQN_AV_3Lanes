@@ -1,0 +1,58 @@
+TRAIN BASICS
+python main_train.py --episodes 500
+python main_train.py --episodes 1000 --no-verbose
+python main_train.py --episodes 500 --seed 123
+
+TRAIN WITH VISUALIZE
+python main_train.py --episodes 200 --visualize
+python main_train.py --episodes 200 --visualize --render-every 5
+python main_train.py --episodes 200 --visualize --render-every 10 --save-interval 50
+
+TRAIN FASTER
+python main_train.py --episodes 500 --multiply
+python main_train.py --episodes 500 --multiply --multivalid
+python main_train.py --episodes 500 --memory-size 200000 --multiply
+
+CONTINUE TRAINING
+python main_train.py --loadmodel models\model_stage1A.pth --episodes 300
+python main_train.py --loadmodel models\model_stage1A.pth --episodes 300 --multiply
+python main_train.py --loadmodel models\model_stage1A.pth --episodes 300 --visualize --render-every 5
+
+LOG DETAIL
+python main_train.py --episodes 5 --formula
+python main_train.py --episodes 5 --traininfo
+python main_train.py --episodes 100 --seed 123 --traininfo
+
+CONTINUOUS CYCLES
+python main_train.py --episodes 1000 --continuous
+python main_train.py --episodes 1000 --continuous 5
+python main_train.py --episodes 1000 --continuous 20 --multiply
+
+FINE TUNE MEMORY
+python main_train.py --fine-tune-memory
+python main_train.py --fine-tune-memory --tune-episodes 200 --tune-runs 3
+python main_train.py --fine-tune-memory --tune-memory-sizes 50000 100000 150000 200000
+python main_train.py --fine-tune-memory --tune-dir tuning --tune-label memory_sweep
+
+VISUALIZE MODEL
+python main_visualize.py --model models\model_stage1A.pth --episodes 10
+python main_visualize.py --model models\model_stage1A.pth --episodes 10 --tester
+python main_visualize.py --allstage --episodes 20
+
+VISUALIZE MODES
+python main_visualize.py --manual --episodes 3
+python main_visualize.py --experiment
+python main_visualize.py --speedtest
+python main_visualization.py --episodes 5
+
+MODEL CLEANER
+python func_cleanmodel.py --models-dir models
+python func_cleanmodel.py --models-dir models --max-steps 4000
+python func_cleanmodel.py --models-dir models --pattern model_stage*.pth
+python func_cleanmodel.py --models-dir models --dry-run
+
+TESTS
+python -m unittest discover -p "test_*.py" -v
+python -m unittest test_environment_core.py -v
+python -m unittest test_training_core.py -v
+python -m unittest test_visualize_core.py -v

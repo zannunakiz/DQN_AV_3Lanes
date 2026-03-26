@@ -1,0 +1,368 @@
+"""
+DQN Agent Implementation
+Deep Q-Network for autonomous car navigation
+"""
+
+import numpy as np
+import random
+from collections import deque
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from main_constant import (
+    MEMORY_SIZE,
+    LEARNING_RATE,
+    GAMMA,
+    TRAIN_MAX_EPSILON,
+    TRAIN_MIN_EPSILON,
+    EPSILON_DECAY,
+    BATCH_SIZE,
+    TARGET_UPDATE_FREQ,
+    DQN_HIDDEN_SIZES,
+    GRAD_CLIP_MAX_NORM,
+)
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+
+class DQNNetwork(nn.Module):
+    """Deep Q-Network architecture."""
+
+    def __init__(self, state_size, action_size, hidden_sizes=None):
+        super(DQNNetwork, self).__init__()
+
+        if hidden_sizes is None:
+            hidden_sizes = DQN_HIDDEN_SIZES
+
+        layers = []
+        input_size = state_size
+
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(input_size, hidden_size))
+            layers.append(nn.ReLU())
+            input_size = hidden_size
+
+        layers.append(nn.Linear(input_size, action_size))
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+
+class ReplayBuffer:
+    """Experience replay buffer."""
+
+    def __init__(self, capacity=MEMORY_SIZE):
+        self.buffer = deque(maxlen=capacity)
+
+    def push(self, state, action, reward, next_state, done, discount):
+        self.buffer.append((state, action, reward, next_state, done, discount))
+
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, batch_size)
+        states, actions, rewards, next_states, dones, discounts = zip(*batch)
+
+        return (
+            np.array(states),
+            np.array(actions),
+            np.array(rewards, dtype=np.float32),
+            np.array(next_states),
+            np.array(dones, dtype=np.float32),
+            np.array(discounts, dtype=np.float32),
+        )
+
+    def __len__(self):
+        return len(self.buffer)
+
+
+class DQNAgent:
+    """DQN agent with replay buffer and target network."""
+
+    def __init__(
+        self,
+        state_size,
+        action_size,
+        learning_rate=LEARNING_RATE,
+        gamma=GAMMA,
+        epsilon=TRAIN_MAX_EPSILON,
+        epsilon_min=TRAIN_MIN_EPSILON,
+        epsilon_decay=EPSILON_DECAY,
+        batch_size=BATCH_SIZE,
+        target_update_freq=TARGET_UPDATE_FREQ,
+        memory_size=MEMORY_SIZE,
+    ):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.gamma = gamma
+        self.memory_size = int(memory_size)
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.batch_size = batch_size
+        self.target_update_freq = target_update_freq
+        self.update_counter = 0
+
+
+        self.policy_net = DQNNetwork(state_size, action_size).to(device)
+        self.target_net = DQNNetwork(state_size, action_size).to(device)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+
+
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=learning_rate)
+
+
+        self.memory = ReplayBuffer(capacity=self.memory_size)
+
+
+        self.loss_history = []
+
+        self.last_traininfo = None
+
+    def select_action(self, state, training=True, debug=False):
+        """Select action using epsilon-greedy policy.
+
+        If `debug=True`, returns `(action, info_dict)` where info_dict includes:
+        - explore: bool (whether random action was used)
+        - rand: float (random draw used for epsilon decision, None if not training)
+        - epsilon: float
+        """
+        rand_value = None
+        explore = False
+        if training:
+            rand_value = random.random()
+            explore = rand_value < self.epsilon
+
+        if explore:
+            action = random.randrange(self.action_size)
+            if debug:
+                return action, {"explore": True, "rand": rand_value, "epsilon": float(self.epsilon)}
+            return action
+
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
+            q_values = self.policy_net(state_tensor)
+            action = q_values.argmax(dim=1).item()
+            if debug:
+                return action, {"explore": False, "rand": rand_value, "epsilon": float(self.epsilon)}
+            return action
+
+    def get_q_values(self, state):
+        """Return Q-values for a given state as a 1D numpy array.
+
+        This is used only for visualization/debugging and does not affect training.
+        """
+        with torch.no_grad():
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
+            q_values = self.policy_net(state_tensor).squeeze(0).cpu().numpy()
+        return q_values
+
+    def remember(self, state, action, reward, next_state, done, discount=None):
+        """Store experience in replay buffer.
+
+        discount is the bootstrapping factor applied to maxQ(next_state).
+        - 1-step transition: discount = gamma
+        - N-step transition: discount = gamma ** N
+        """
+        if discount is None:
+            discount = self.gamma
+        self.memory.push(state, action, reward, next_state, done, discount)
+
+    def train_step(self, formula=False, tag=None, traininfo=False):
+        """Perform one training step.
+
+        When `formula=True`, prints detailed per-step calculations (sampled from batch[0]).
+        """
+        if len(self.memory) < self.batch_size:
+            if formula:
+                step_tag = str(tag) if tag is not None else "?/?"
+                print(
+                    f"[FORMULA][{step_tag}][TRAIN_SKIP] len(memory)={len(self.memory)} < batch_size={self.batch_size}"
+                )
+            if traininfo:
+                self.last_traininfo = {
+                    "skipped": True,
+                    "reason": "buffer",
+                    "buffer_len": int(len(self.memory)),
+                    "batch_size": int(self.batch_size),
+                }
+            return None
+
+
+        states, actions, rewards, next_states, dones, discounts = self.memory.sample(
+            self.batch_size
+        )
+
+
+        states = torch.FloatTensor(states).to(device)
+        actions = torch.LongTensor(actions).to(device)
+        rewards = torch.FloatTensor(rewards).to(device)
+        next_states = torch.FloatTensor(next_states).to(device)
+        dones = torch.FloatTensor(dones).to(device)
+        discounts = torch.FloatTensor(discounts).to(device)
+
+
+        current_q_values = self.policy_net(states).gather(1, actions.unsqueeze(1))
+
+
+        with torch.no_grad():
+            next_q_values = self.target_net(next_states).max(1)[0]
+            target_q_values = rewards + (1 - dones) * discounts * next_q_values
+
+
+        a0 = r0 = d0 = g0 = max_next0 = y0 = q0 = delta0 = se0 = None
+        if formula or traininfo:
+            try:
+                a0 = int(actions[0].item())
+                r0 = float(rewards[0].item())
+                d0 = float(dones[0].item())
+                g0 = float(discounts[0].item())
+                max_next0 = float(next_q_values[0].item())
+                y0 = float(target_q_values[0].item())
+                q0 = float(current_q_values[0].item())
+                delta0 = y0 - q0
+                se0 = delta0 * delta0
+            except Exception:
+                pass
+
+
+        if formula:
+            step_tag = str(tag) if tag is not None else "?/?"
+            try:
+
+                td_errors = (target_q_values - current_q_values.squeeze(1)).detach()
+                manual_loss = float((td_errors * td_errors).mean().item())
+
+                print(
+                    f"[FORMULA][{step_tag}][TD_TARGET] y = r + (1-d)*discount*maxQ_next"
+                    f" = {r0:.3f} + (1-{d0:.0f})*{g0:.3f}*{max_next0:.3f} = {y0:.3f}"
+                )
+                print(
+                    f"[FORMULA][{step_tag}][CURRENT_Q] Q(s,a) = policy_net(s)[a={a0}] = {q0:.3f}"
+                )
+                print(f"[FORMULA][{step_tag}][TD_ERROR] delta = y - Q = {y0:.3f} - {q0:.3f} = {delta0:.3f}")
+                print(f"[FORMULA][{step_tag}][SQ_ERROR] (y-Q)^2 = ({delta0:.3f})^2 = {se0:.3f}")
+                print(f"[FORMULA][{step_tag}][LOSS] loss = mean((y - Q)^2) = {manual_loss:.3f}")
+            except Exception as e:
+                print(f"[FORMULA][{step_tag}][WARN] train_step formula logging failed: {e}")
+
+
+        loss = F.mse_loss(current_q_values.squeeze(), target_q_values)
+
+
+        self.optimizer.zero_grad()
+        loss.backward()
+
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            self.policy_net.parameters(),
+            max_norm=GRAD_CLIP_MAX_NORM,
+        )
+        self.optimizer.step()
+
+        if formula:
+            step_tag = str(tag) if tag is not None else "?/?"
+            try:
+
+                with torch.no_grad():
+                    post_q_values = self.policy_net(states).gather(1, actions.unsqueeze(1))
+                q0_after = float(post_q_values[0].item())
+                print(
+                    f"[FORMULA][{step_tag}][BACKPROP] grad_norm(before_clip) = {float(grad_norm):.3f}"
+                )
+                print(
+                    f"[FORMULA][{step_tag}][BACKPROP] Q(s,a) before -> after = {float(current_q_values[0].item()):.3f} -> {q0_after:.3f}"
+                )
+            except Exception as e:
+                print(f"[FORMULA][{step_tag}][WARN] post-update logging failed: {e}")
+
+
+        self.update_counter += 1
+        updated_target = False
+        if self.update_counter % self.target_update_freq == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+            updated_target = True
+            if formula:
+                step_tag = str(tag) if tag is not None else "?/?"
+                print(
+                    f"[FORMULA][{step_tag}][TARGET_UPDATE] hard update: target_net <- policy_net (update_counter={self.update_counter}, freq={self.target_update_freq})"
+                )
+
+        loss_value = loss.item()
+        self.loss_history.append(loss_value)
+
+        if traininfo:
+            try:
+                sample_state = states[0].detach().cpu().numpy().tolist()
+                sample_next_state = next_states[0].detach().cpu().numpy().tolist()
+            except Exception:
+                sample_state = None
+                sample_next_state = None
+            self.last_traininfo = {
+                "skipped": False,
+                "batch_size": int(self.batch_size),
+                "buffer_len": int(len(self.memory)),
+                "sample": {
+                    "state": sample_state,
+                    "action": a0,
+                    "reward": r0,
+                    "next_state": sample_next_state,
+                    "done": d0,
+                    "discount": g0,
+                },
+                "target": {
+                    "r": r0,
+                    "d": d0,
+                    "discount": g0,
+                    "max_next": max_next0,
+                    "y": y0,
+                },
+                "q": {
+                    "current": q0,
+                },
+                "td_error": delta0,
+                "sq_error": se0,
+                "loss": float(loss_value),
+                "grad_norm": float(grad_norm) if grad_norm is not None else None,
+                "updated_target": bool(updated_target),
+                "update_counter": int(self.update_counter),
+                "target_update_freq": int(self.target_update_freq),
+            }
+
+        return loss_value
+
+    def decay_epsilon(self):
+        """Decay exploration rate"""
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+
+    def reset_memory(self):
+        """Clear replay buffer (useful when environment distribution shifts)."""
+        self.memory = ReplayBuffer(capacity=self.memory_size)
+
+    def hard_update_target(self):
+        """Immediate sync: target_net <- policy_net."""
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+
+    def save(self, filepath):
+        """Save model weights"""
+        torch.save({
+            'policy_net_state_dict': self.policy_net.state_dict(),
+            'target_net_state_dict': self.target_net.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'epsilon': self.epsilon,
+            'loss_history': self.loss_history
+        }, filepath)
+        print(f"Model saved to {filepath}")
+
+    def load(self, filepath):
+        """Load model weights"""
+        checkpoint = torch.load(filepath, map_location=device)
+        self.policy_net.load_state_dict(checkpoint['policy_net_state_dict'])
+        self.target_net.load_state_dict(checkpoint['target_net_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.epsilon = checkpoint['epsilon']
+        self.loss_history = checkpoint.get('loss_history', [])
+        print(f"Model loaded from {filepath}")
+
