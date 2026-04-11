@@ -1,0 +1,14 @@
+TRAIN NEW MODEL (Training)
+python main_train.py --episodes 5000
+
+RUN MAIN MODEL ON TRAINING STAGE (Evaluasi)
+python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --allstage --episodes 10000 
+
+RUN MAIN MODEL ON 45 TESTER STAGES (Pengujian)
+python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --allstage --episodes 10000 --tester
+
+RUN MAIN MODEL ON CUSTOM CONTROLLED STAGE (add any obstacles while running)
+python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --episodes 10000 --experiment
+
+
+NOTE: To change/edit obstacles, edit from main_constant.py 
