@@ -9,6 +9,7 @@ import math
 import os
 import csv
 import re
+import random
 
 from main_environment import CarEnvironment, get_num_stages
 from main_dqn_agent import DQNAgent
@@ -39,6 +40,9 @@ try:
         TARGET_UPDATE_FREQ,
         TRAIN_MAX_EPSILON,
         TRAIN_MIN_EPSILON,
+        startRandom,
+        gapRandom,
+        maxRandom,
     )
 except ImportError:
     SCREEN_HEIGHT = 600
@@ -59,6 +63,9 @@ except ImportError:
     TARGET_UPDATE_FREQ = 10
     TRAIN_MAX_EPSILON = 1.0
     TRAIN_MIN_EPSILON = 0.001
+    startRandom = 400
+    gapRandom = 125
+    maxRandom = 50
 
 
 WHITE = (255, 255, 255)
@@ -75,6 +82,87 @@ LIGHT_BLUE = (173, 216, 230)
 VISUALIZE_LOG_DIR = "visualize_logs"
 VISUALIZE_LOG_BASENAME = "visualize"
 VISUALIZE_LOG_PATTERN = re.compile(r"^visualize-(\d+)\.csv$")
+
+
+class RandomObstacleGenerator:
+    """Generate finite random obstacle rows for --random visualization."""
+
+    def __init__(
+        self,
+        start_y=startRandom,
+        gap_y=gapRandom,
+        min_vehicles_per_row=1,
+        max_vehicles_per_row=2,
+        max_rows=maxRandom,
+        lookahead_y=1500,
+        cleanup_behind_y=300,
+        rng=None,
+    ):
+        self.start_y = float(start_y)
+        self.gap_y = float(gap_y)
+        self.min_vehicles_per_row = int(min_vehicles_per_row)
+        self.max_vehicles_per_row = int(max_vehicles_per_row)
+        self.max_rows = int(max(1, max_rows))
+        self.lookahead_y = float(lookahead_y)
+        self.cleanup_behind_y = float(cleanup_behind_y)
+        self.rng = rng if rng is not None else random
+        self.next_spawn_y = self.start_y
+        self.rows_spawned = 0
+        self.total_obstacles_spawned = 0
+
+    def reset(self):
+        self.next_spawn_y = self.start_y
+        self.rows_spawned = 0
+        self.total_obstacles_spawned = 0
+
+    def _choose_row_lanes(self, lane_count):
+        lane_count = int(max(1, lane_count))
+        min_count = max(1, min(self.min_vehicles_per_row, lane_count))
+        max_count = max(min_count, min(self.max_vehicles_per_row, lane_count))
+        vehicle_count = self.rng.randint(min_count, max_count)
+        return sorted(self.rng.sample(range(lane_count), vehicle_count))
+
+    def build_next_row_configs(self, lane_count):
+        lanes = self._choose_row_lanes(lane_count)
+        return [{"lane": lane, "y": self.next_spawn_y} for lane in lanes]
+
+    def build_all_configs(self, lane_count):
+        configs = []
+        self.reset()
+        while self.rows_spawned < self.max_rows:
+            row_configs = self.build_next_row_configs(lane_count)
+            configs.extend(row_configs)
+            self.rows_spawned += 1
+            self.total_obstacles_spawned += len(row_configs)
+            self.next_spawn_y += self.gap_y
+        return configs
+
+    def append_all_obstacles(self, env):
+        configs = self.build_all_configs(env.lane_count)
+        return env.append_obstacles(configs)
+
+    def append_due_obstacles(self, env):
+        added = 0
+        while (
+            self.rows_spawned < self.max_rows
+            and self.next_spawn_y <= float(env.car_y) + self.lookahead_y
+        ):
+            row_configs = self.build_next_row_configs(env.lane_count)
+            added += env.append_obstacles(row_configs)
+            self.rows_spawned += 1
+            self.total_obstacles_spawned += len(row_configs)
+            self.next_spawn_y += self.gap_y
+
+        self.cleanup_obstacles(env)
+        return added
+
+    def cleanup_obstacles(self, env):
+        cutoff_y = float(env.car_y) - self.cleanup_behind_y
+        before_count = len(env.obstacles)
+        env.obstacles = [
+            obs for obs in env.obstacles if float(obs.get("y", 0.0)) >= cutoff_y
+        ]
+        return before_count - len(env.obstacles)
 
 
 def get_next_visualize_csv_path(log_dir=VISUALIZE_LOG_DIR):
@@ -411,7 +499,7 @@ class GameRenderer:
             4,
         )
 
-        if not self.experiment_mode:
+        if not self.experiment_mode and math.isfinite(float(finish_line_y)):
             _, finish_screen_y = self.world_to_screen(0, finish_line_y, camera_offset)
             if -20 < finish_screen_y < self.road_display_height + 20:
                 for i in range(0, self.road_display_width, 20):
@@ -1116,20 +1204,35 @@ def run_visualization(
     allstage=False,
     tester=False,
     experiment=False,
+    random_mode=False,
 ):
     """Run visualization with trained model or manual control"""
     experiment_mode = bool(experiment)
+    random_mode = bool(random_mode)
+    if random_mode and experiment_mode:
+        print("Random mode ignores --experiment.")
+        experiment_mode = False
     if experiment_mode and allstage:
         print("Experiment mode ignores --allstage.")
         allstage = False
+    if random_mode and allstage:
+        print("Random mode ignores --allstage.")
+        allstage = False
+    if random_mode and tester:
+        print("Random mode ignores --tester.")
+        tester = False
     if experiment_mode:
 
+        obstacles_cfg = [[]]
+    elif random_mode:
         obstacles_cfg = [[]]
     else:
         obstacles_cfg = TEST_OBSTACLES if tester else OBSTACLES
 
     if experiment_mode:
         env = CarEnvironment(obstacles_config=obstacles_cfg, disable_finish=True)
+    elif random_mode:
+        env = CarEnvironment(obstacles_config=obstacles_cfg, disable_finish=False)
     elif allstage:
         env = CarEnvironment(curriculum_stage=0, obstacles_config=obstacles_cfg)
     else:
@@ -1158,6 +1261,7 @@ def run_visualization(
 
     renderer = GameRenderer(env, scale=DEFAULT_SCALE, experiment_mode=experiment_mode)
     planner = ExperimentObstaclePlanner() if experiment_mode else None
+    random_generator = RandomObstacleGenerator() if random_mode else None
     visualize_csv_path = get_next_visualize_csv_path()
     visualize_rewards = []
     print(f"Visualize CSV: {visualize_csv_path}")
@@ -1174,6 +1278,11 @@ def run_visualization(
     if experiment_mode:
         print("  Mouse: Use Obstacle Controls panel")
         print("Obstacle source: EXPERIMENT (empty start)")
+    elif random_mode:
+        print(
+            f"Obstacle source: RANDOM finite (start={int(startRandom)}, gap={int(gapRandom)}, "
+            f"rows={int(maxRandom)}, 1-2 vehicle(s) per row)"
+        )
     else:
         print(f"Obstacle source: {'TEST_OBSTACLES' if tester else 'OBSTACLES'}")
     print("=" * 30)
@@ -1202,6 +1311,9 @@ def run_visualization(
 
     while running and (experiment_mode or episode < episodes):
         state = env.reset()
+        if random_generator is not None:
+            random_generator.append_all_obstacles(env)
+            state = env._get_state()
         total_reward = 0
         done = False
         close_distance_total = 0
@@ -1303,6 +1415,9 @@ def run_visualization(
                 next_state, reward, done, info = env.step(
                     last_action, apply_steering=is_decision_step
                 )
+                if random_generator is not None:
+                    random_generator.append_due_obstacles(env)
+                    next_state = env._get_state()
 
                 total_reward += reward
                 close_distance_total += int(info.get("warning_close_count", 0))
@@ -1577,6 +1692,11 @@ if __name__ == "__main__":
         help="Enable obstacle experiment mode (no finish line, custom spawn controls)",
     )
     parser.add_argument(
+        "--random",
+        action="store_true",
+        help="Enable finite random obstacles (startRandom/gapRandom/maxRandom, 1-2 vehicles per row)",
+    )
+    parser.add_argument(
         "--speedtest",
         action="store_true",
         help="Run endless speed test (Up/Down queue fast/slow straight decisions at interval boundaries)",
@@ -1594,6 +1714,5 @@ if __name__ == "__main__":
             allstage=args.allstage,
             tester=args.tester,
             experiment=args.experiment,
+            random_mode=args.random,
         )
-
-

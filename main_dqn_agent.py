@@ -27,6 +27,7 @@ from main_constant import (
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
+
 class DQNNetwork(nn.Module):
     """Deep Q-Network architecture."""
 
@@ -159,6 +160,160 @@ class DQNAgent:
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(device)
             q_values = self.policy_net(state_tensor).squeeze(0).cpu().numpy()
         return q_values
+
+    @staticmethod
+    def _formula_float(value):
+        return f"{float(value):+.6f}"
+
+    def _formula_action_labels(self):
+        if int(self.action_size) == 6:
+            return [
+                "slow_left",
+                "slow_straight",
+                "slow_right",
+                "fast_left",
+                "fast_straight",
+                "fast_right",
+            ]
+        return [f"a{i}" for i in range(int(self.action_size))]
+
+    def get_q_values_with_calculation(self, state, tag=None):
+        """Return Q-values while printing a detailed forward-pass breakdown."""
+        step_tag = str(tag) if tag is not None else "?/?"
+        state_array = np.asarray(state, dtype=np.float64).reshape(-1)
+        linear_layers = [
+            module
+            for module in self.policy_net.network
+            if isinstance(module, nn.Linear)
+        ]
+        total_linear_layers = len(linear_layers)
+        action_labels = self._formula_action_labels()
+
+        input_line = ", ".join(
+            f"x[{idx}]={self._formula_float(value)}"
+            for idx, value in enumerate(state_array)
+        )
+        print(f"[FORMULA][{step_tag}] input = [{input_line}]")
+
+        activations = np.array(state_array, dtype=np.float64, copy=True)
+        linear_index = 0
+
+        for module in self.policy_net.network:
+            if not isinstance(module, nn.Linear):
+                continue
+
+            linear_index += 1
+            is_output_layer = linear_index == total_linear_layers
+            weights = module.weight.detach().cpu().numpy().astype(np.float64, copy=False)
+            bias = module.bias.detach().cpu().numpy().astype(np.float64, copy=False)
+            input_symbol = "x" if linear_index == 1 else f"a{linear_index - 1}"
+            z_symbol = "q" if is_output_layer else f"z{linear_index}"
+            layer_name = "OUTPUT" if is_output_layer else f"L{linear_index}"
+
+            print(
+                f"[FORMULA][{step_tag}][Q_CALCULATION] {layer_name} Linear("
+                f"{weights.shape[1]} -> {weights.shape[0]})"
+            )
+
+            pre_activation = np.zeros(weights.shape[0], dtype=np.float64)
+
+            for out_idx in range(weights.shape[0]):
+                symbol_label = (
+                    action_labels[out_idx]
+                    if is_output_layer and out_idx < len(action_labels)
+                    else str(out_idx)
+                )
+                term_formula = " + ".join(
+                    f"(W{linear_index}[{out_idx},{in_idx}]*{input_symbol}[{in_idx}])"
+                    for in_idx in range(weights.shape[1])
+                )
+                term_substitution = " + ".join(
+                    f"({self._formula_float(weights[out_idx, in_idx])}*"
+                    f"{self._formula_float(activations[in_idx])})"
+                    for in_idx in range(weights.shape[1])
+                )
+                term_products_list = [
+                    float(weights[out_idx, in_idx] * activations[in_idx])
+                    for in_idx in range(weights.shape[1])
+                ]
+                term_products = " + ".join(
+                    self._formula_float(product) for product in term_products_list
+                )
+                weighted_sum = float(np.sum(term_products_list))
+                z_value = float(bias[out_idx] + weighted_sum)
+                pre_activation[out_idx] = z_value
+
+                if is_output_layer:
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"output[{symbol_label}] formula: "
+                        f"q[{out_idx}] = b{linear_index}[{out_idx}] + {term_formula}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"output[{symbol_label}] values : "
+                        f"q[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{term_substitution}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"output[{symbol_label}] prods  : "
+                        f"q[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{term_products}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"output[{symbol_label}] result : "
+                        f"q[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{self._formula_float(weighted_sum)} = {self._formula_float(z_value)}"
+                    )
+                else:
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"L{linear_index}[{out_idx}] formula: "
+                        f"{z_symbol}[{out_idx}] = b{linear_index}[{out_idx}] + {term_formula}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"L{linear_index}[{out_idx}] values : "
+                        f"{z_symbol}[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{term_substitution}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"L{linear_index}[{out_idx}] prods  : "
+                        f"{z_symbol}[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{term_products}"
+                    )
+                    print(
+                        f"[FORMULA][{step_tag}] "
+                        f"L{linear_index}[{out_idx}] result : "
+                        f"{z_symbol}[{out_idx}] = {self._formula_float(bias[out_idx])} + "
+                        f"{self._formula_float(weighted_sum)} = {self._formula_float(z_value)}"
+                    )
+
+            if is_output_layer:
+                activations = pre_activation
+                continue
+
+            post_activation = np.maximum(pre_activation, 0.0)
+            for out_idx, (z_value, a_value) in enumerate(
+                zip(pre_activation, post_activation)
+            ):
+                print(
+                    f"[FORMULA][{step_tag}][Q_CALCULATION] "
+                    f"L{linear_index}[{out_idx}] relu   : "
+                    f"a{linear_index}[{out_idx}] = max(0, {z_symbol}[{out_idx}]="
+                    f"{self._formula_float(z_value)}) = {self._formula_float(a_value)}"
+                )
+            activations = post_activation
+
+        output_line = ", ".join(
+            f"{label}={self._formula_float(value)}"
+            for label, value in zip(action_labels, activations)
+        )
+        print(f"[FORMULA][{step_tag}][Q_CALCULATION] output = [{output_line}]")
+        return activations.astype(np.float32)
 
     def remember(self, state, action, reward, next_state, done, discount=None):
         """Store experience in replay buffer.
@@ -365,4 +520,3 @@ class DQNAgent:
         self.epsilon = checkpoint['epsilon']
         self.loss_history = checkpoint.get('loss_history', [])
         print(f"Model loaded from {filepath}")
-

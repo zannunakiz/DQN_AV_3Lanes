@@ -10,5 +10,8 @@ python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth -
 RUN MAIN MODEL ON CUSTOM CONTROLLED STAGE (add any obstacles while running)
 python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --episodes 10000 --experiment
 
+RUN MAIN MODEL ON RANDOM 50-SET OBSTACLE STAGE
+python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --episodes 10000 --random
+
 
 NOTE: To change/edit obstacles, edit from main_constant.py 

@@ -731,7 +731,7 @@ def _train_dqn_cycle(
                     print(f"\n[FORMULA][{step_tag}][TIMEFRAME] {sep}")
 
                     try:
-                        q_s = agent.get_q_values(state)
+                        q_s = agent.get_q_values_with_calculation(state, tag=step_tag)
                         q_s_list = [f"{float(x):.3f}" for x in q_s.tolist()]
                         q_max = float(np.max(q_s))
                         a_greedy = int(np.argmax(q_s))

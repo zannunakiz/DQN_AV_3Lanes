@@ -37,6 +37,13 @@ USE_PNG = True
 # Konversi cepat: px/s = world_units/step * DEFAULT_SCALE * FPS.
 # =============================================================================
 CAR_OBSTACLE_SPEED = 2.1555555555555554  # ~= 194 px/s ~= 50 km/h
+# CAR_OBSTACLE_SPEED = 2.379259259259259  
+# Approx conversions (uses DEFAULT_SCALE=1.5 and FPS=60 -> px/s = world_units/step * 90)
+# 55 km/h -> ~214.13 px/s -> ~2.379259259259259 world_units/step
+# 60 km/h -> ~233.60 px/s -> ~2.5955555555555554 world_units/step
+# 65 km/h -> ~253.07 px/s -> ~2.8129629629629627 world_units/step
+# 70 km/h -> ~272.53 px/s -> ~3.0281481481481482 world_units/step
+# 75 km/h -> ~292.00 px/s -> ~3.2444444444444446 world_units/step
 OBSTACLE_SPEED = CAR_OBSTACLE_SPEED
 
 # Kalibrasi saat ini memetakan 214 px/s ~= 55 km/h dan 292 px/s ~= 75 km/h.
@@ -77,7 +84,17 @@ ALLSTAGE_CONSECUTIVE_REQ = 1
 INDEPENDENT_BASED = True
 SUCCESS_BASED_REQ = 1
 INDEPENDENT_COUNT_REQ = 10000
-ValidationTesterMode = True
+ValidationTesterMode = False
+
+# =============================================================================
+# RANDOM VISUALIZATION OBSTACLES
+# =============================================================================
+startRandom = 400
+gapRandom = 125
+maxRandom = 50
+START_RANDOM = startRandom
+GAP_RANDOM = gapRandom
+MAX_RANDOM = maxRandom
 
 # =============================================================================
 # EPSILON MANAGEMENT
@@ -174,6 +191,12 @@ PENALTY_SLOW_WHEN_CLEAR = -0.030
 # - 50  = sangat ketat
 # =============================================================================
 OBSTACLES = [
+    
+    # [
+    #     {"lane": 1, "y":100},
+    #     {"lane": 1, "y":500},
+    # ]
+    
     # Stage utama training.
     [
         {"lane": 1, "y": 250},
@@ -304,162 +327,162 @@ OBSTACLES = [
 # =============================================================================
 TEST_OBSTACLES = [
     # Single obstacle dan pasangan obstacle awal.
-    [{"lane": 0, "y": 250}],  # 1
-    [{"lane": 1, "y": 250}],  # 2
-    [{"lane": 2, "y": 250}],  # 3
-    [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}],  # 4
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}],  # 5
-    [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}],  # 6
-    # Base obstacle mulai lane kiri.
-    [{"lane": 0, "y": 250}, {"lane": 0, "y": 375}],  # 7
-    [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}],  # 8
-    [{"lane": 0, "y": 250}, {"lane": 2, "y": 375}],  # 9
-    [{"lane": 0, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 10
-    [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 11
-    [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 12
-    # Base obstacle mulai lane tengah.
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 375}],  # 13
-    [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}],  # 14
-    [{"lane": 1, "y": 250}, {"lane": 2, "y": 375}],  # 15
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 16
-    [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 17
-    [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 18
-    # Base obstacle mulai lane kanan.
-    [{"lane": 2, "y": 250}, {"lane": 0, "y": 375}],  # 19
-    [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}],  # 20
-    [{"lane": 2, "y": 250}, {"lane": 2, "y": 375}],  # 21
-    [{"lane": 2, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 22
-    [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 23
-    [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 24
-    # Base obstacle dua lane awal.
-    [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 0, "y": 375}],  # 25
-    [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 1, "y": 375}],  # 26
-    [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 2, "y": 375}],  # 27
-    [
-        {"lane": 0, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 0, "y": 375},
-        {"lane": 2, "y": 375},
-    ],  # 28
-    [
-        {"lane": 0, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 1, "y": 375},
-        {"lane": 0, "y": 375},
-    ],  # 29
-    [
-        {"lane": 0, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 1, "y": 375},
-        {"lane": 2, "y": 375},
-    ],  # 30
-    # Base obstacle kombinasi tengah-kiri.
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 0, "y": 370}],  # 31
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 1, "y": 370}],  # 32
-    [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 2, "y": 370}],  # 33
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 0, "y": 250},
-        {"lane": 0, "y": 370},
-        {"lane": 2, "y": 370},
-    ],  # 34
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 0, "y": 250},
-        {"lane": 1, "y": 370},
-        {"lane": 0, "y": 370},
-    ],  # 35
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 0, "y": 250},
-        {"lane": 1, "y": 370},
-        {"lane": 2, "y": 370},
-    ],  # 36
-    # Base obstacle kombinasi tengah-kanan.
-    [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 0, "y": 370}],  # 37
-    [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 1, "y": 370}],  # 38
-    [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 2, "y": 370}],  # 39
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 0, "y": 370},
-        {"lane": 2, "y": 370},
-    ],  # 40
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 1, "y": 370},
-        {"lane": 0, "y": 370},
-    ],  # 41
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 1, "y": 370},
-        {"lane": 2, "y": 370},
-    ],  # 42
-    # Pola padat dengan ruang manuver sempit.
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 2, "y": 250},
-        {"lane": 1, "y": 300},
-        {"lane": 2, "y": 300},
-        {"lane": 1, "y": 350},
-        {"lane": 2, "y": 350},
-        {"lane": 1, "y": 400},
-        {"lane": 2, "y": 400},
-        {"lane": 1, "y": 450},
-        {"lane": 2, "y": 450},
-        {"lane": 1, "y": 500},
-        {"lane": 2, "y": 500},
-        {"lane": 1, "y": 650},
-        {"lane": 0, "y": 650},
-        {"lane": 1, "y": 700},
-        {"lane": 0, "y": 700},
-        {"lane": 1, "y": 750},
-        {"lane": 0, "y": 750},
-        {"lane": 1, "y": 800},
-        {"lane": 0, "y": 800},
-        {"lane": 1, "y": 850},
-        {"lane": 0, "y": 850},
-        {"lane": 1, "y": 900},
-        {"lane": 0, "y": 900},
-        {"lane": 0, "y": 1050},
-        {"lane": 2, "y": 1050},
-        {"lane": 0, "y": 1100},
-        {"lane": 2, "y": 1100},
-        {"lane": 0, "y": 1150},
-        {"lane": 2, "y": 1150},
-        {"lane": 0, "y": 1200},
-        {"lane": 2, "y": 1200},
-        {"lane": 0, "y": 1250},
-        {"lane": 2, "y": 1250},
-        {"lane": 0, "y": 1300},
-        {"lane": 2, "y": 1300},
-        {"lane": 1, "y": 1420},
-    ],  # 43
-    # Pola zig-zag untuk forcing lane change berulang.
-    [
-        {"lane": 1, "y": 250},
-        {"lane": 0, "y": 250},
-        {"lane": 1, "y": 375},
-        {"lane": 2, "y": 375},
-        {"lane": 1, "y": 500},
-        {"lane": 0, "y": 500},
-        {"lane": 1, "y": 625},
-        {"lane": 2, "y": 625},
-        {"lane": 1, "y": 750},
-        {"lane": 0, "y": 750},
-        {"lane": 1, "y": 875},
-        {"lane": 2, "y": 875},
-        {"lane": 1, "y": 1000},
-        {"lane": 0, "y": 1000},
-        {"lane": 1, "y": 1125},
-        {"lane": 2, "y": 1125},
-        {"lane": 1, "y": 1250},
-        {"lane": 0, "y": 1250},
-        {"lane": 1, "y": 1375},
-        {"lane": 2, "y": 1375},
-    ],  # 44
+    # [{"lane": 0, "y": 250}],  # 1
+    # [{"lane": 1, "y": 250}],  # 2
+    # [{"lane": 2, "y": 250}],  # 3
+    # [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}],  # 4
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}],  # 5
+    # [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}],  # 6
+    # # Base obstacle mulai lane kiri.
+    # [{"lane": 0, "y": 250}, {"lane": 0, "y": 375}],  # 7
+    # [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}],  # 8
+    # [{"lane": 0, "y": 250}, {"lane": 2, "y": 375}],  # 9
+    # [{"lane": 0, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 10
+    # [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 11
+    # [{"lane": 0, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 12
+    # # Base obstacle mulai lane tengah.
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 375}],  # 13
+    # [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}],  # 14
+    # [{"lane": 1, "y": 250}, {"lane": 2, "y": 375}],  # 15
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 16
+    # [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 17
+    # [{"lane": 1, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 18
+    # # Base obstacle mulai lane kanan.
+    # [{"lane": 2, "y": 250}, {"lane": 0, "y": 375}],  # 19
+    # [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}],  # 20
+    # [{"lane": 2, "y": 250}, {"lane": 2, "y": 375}],  # 21
+    # [{"lane": 2, "y": 250}, {"lane": 0, "y": 375}, {"lane": 2, "y": 375}],  # 22
+    # [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}, {"lane": 0, "y": 375}],  # 23
+    # [{"lane": 2, "y": 250}, {"lane": 1, "y": 375}, {"lane": 2, "y": 375}],  # 24
+    # # Base obstacle dua lane awal.
+    # [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 0, "y": 375}],  # 25
+    # [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 1, "y": 375}],  # 26
+    # [{"lane": 0, "y": 250}, {"lane": 2, "y": 250}, {"lane": 2, "y": 375}],  # 27
+    # [
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 0, "y": 375},
+    #     {"lane": 2, "y": 375},
+    # ],  # 28
+    # [
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 1, "y": 375},
+    #     {"lane": 0, "y": 375},
+    # ],  # 29
+    # [
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 1, "y": 375},
+    #     {"lane": 2, "y": 375},
+    # ],  # 30
+    # # Base obstacle kombinasi tengah-kiri.
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 0, "y": 370}],  # 31
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 1, "y": 370}],  # 32
+    # [{"lane": 1, "y": 250}, {"lane": 0, "y": 250}, {"lane": 2, "y": 370}],  # 33
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 0, "y": 370},
+    #     {"lane": 2, "y": 370},
+    # ],  # 34
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 1, "y": 370},
+    #     {"lane": 0, "y": 370},
+    # ],  # 35
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 1, "y": 370},
+    #     {"lane": 2, "y": 370},
+    # ],  # 36
+    # # Base obstacle kombinasi tengah-kanan.
+    # [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 0, "y": 370}],  # 37
+    # [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 1, "y": 370}],  # 38
+    # [{"lane": 1, "y": 250}, {"lane": 2, "y": 250}, {"lane": 2, "y": 370}],  # 39
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 0, "y": 370},
+    #     {"lane": 2, "y": 370},
+    # ],  # 40
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 1, "y": 370},
+    #     {"lane": 0, "y": 370},
+    # ],  # 41
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 1, "y": 370},
+    #     {"lane": 2, "y": 370},
+    # ],  # 42
+    # # Pola padat dengan ruang manuver sempit.
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 2, "y": 250},
+    #     {"lane": 1, "y": 300},
+    #     {"lane": 2, "y": 300},
+    #     {"lane": 1, "y": 350},
+    #     {"lane": 2, "y": 350},
+    #     {"lane": 1, "y": 400},
+    #     {"lane": 2, "y": 400},
+    #     {"lane": 1, "y": 450},
+    #     {"lane": 2, "y": 450},
+    #     {"lane": 1, "y": 500},
+    #     {"lane": 2, "y": 500},
+    #     {"lane": 1, "y": 650},
+    #     {"lane": 0, "y": 650},
+    #     {"lane": 1, "y": 700},
+    #     {"lane": 0, "y": 700},
+    #     {"lane": 1, "y": 750},
+    #     {"lane": 0, "y": 750},
+    #     {"lane": 1, "y": 800},
+    #     {"lane": 0, "y": 800},
+    #     {"lane": 1, "y": 850},
+    #     {"lane": 0, "y": 850},
+    #     {"lane": 1, "y": 900},
+    #     {"lane": 0, "y": 900},
+    #     {"lane": 0, "y": 1050},
+    #     {"lane": 2, "y": 1050},
+    #     {"lane": 0, "y": 1100},
+    #     {"lane": 2, "y": 1100},
+    #     {"lane": 0, "y": 1150},
+    #     {"lane": 2, "y": 1150},
+    #     {"lane": 0, "y": 1200},
+    #     {"lane": 2, "y": 1200},
+    #     {"lane": 0, "y": 1250},
+    #     {"lane": 2, "y": 1250},
+    #     {"lane": 0, "y": 1300},
+    #     {"lane": 2, "y": 1300},
+    #     {"lane": 1, "y": 1420},
+    # ],  # 43
+    # # Pola zig-zag untuk forcing lane change berulang.
+    # [
+    #     {"lane": 1, "y": 250},
+    #     {"lane": 0, "y": 250},
+    #     {"lane": 1, "y": 375},
+    #     {"lane": 2, "y": 375},
+    #     {"lane": 1, "y": 500},
+    #     {"lane": 0, "y": 500},
+    #     {"lane": 1, "y": 625},
+    #     {"lane": 2, "y": 625},
+    #     {"lane": 1, "y": 750},
+    #     {"lane": 0, "y": 750},
+    #     {"lane": 1, "y": 875},
+    #     {"lane": 2, "y": 875},
+    #     {"lane": 1, "y": 1000},
+    #     {"lane": 0, "y": 1000},
+    #     {"lane": 1, "y": 1125},
+    #     {"lane": 2, "y": 1125},
+    #     {"lane": 1, "y": 1250},
+    #     {"lane": 0, "y": 1250},
+    #     {"lane": 1, "y": 1375},
+    #     {"lane": 2, "y": 1375},
+    # ],  # 44
     # Stage panjang untuk validasi kompleks.
     [
         {"lane": 1, "y": 300},
@@ -495,5 +518,11 @@ TEST_OBSTACLES = [
         {"lane": 0, "y": 2415},
         {"lane": 1, "y": 2455},
         {"lane": 1, "y": 2575},
+        {"lane": 0, "y": 2825},
+        {"lane": 2, "y": 2825},
+        {"lane": 0, "y": 3000},
+        {"lane": 1, "y": 3050},
+        {"lane": 2, "y": 3175},
+        {"lane": 1, "y": 3225}
     ],  # 45
 ]

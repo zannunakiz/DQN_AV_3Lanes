@@ -1,14 +1,17 @@
 import os
+import random
 import tempfile
 import unittest
 
 from main_constant import (
+    FINISH_DISTANCE,
     OBSTACLE_WARNING_DISTANCE_FRONT,
     OBSTACLE_WARNING_DISTANCE_SIDES,
 )
 from main_environment import CarEnvironment
 from main_visualize import (
     ExperimentObstaclePlanner,
+    RandomObstacleGenerator,
     build_visualize_episode_row,
     get_next_visualize_csv_path,
 )
@@ -75,6 +78,49 @@ class TestVisualizeCore(unittest.TestCase):
         self.assertAlmostEqual(configs[1]["y"], 1475.0)
         self.assertEqual(configs[2]["lane"], 1)
         self.assertAlmostEqual(configs[2]["y"], 1475.0)
+
+    def test_random_obstacle_generator_appends_rows_with_configured_gap(self):
+        generator = RandomObstacleGenerator(
+            start_y=400,
+            gap_y=125,
+            lookahead_y=500,
+            rng=random.Random(7),
+        )
+        env = CarEnvironment(obstacles_config=[[]], disable_finish=True)
+        env.reset()
+
+        added_count = generator.append_due_obstacles(env)
+
+        rows = sorted({obs["y"] for obs in env.obstacles})
+        self.assertEqual(rows, [400.0, 525.0])
+        self.assertEqual(generator.rows_spawned, 2)
+        self.assertGreaterEqual(added_count, 2)
+        self.assertLessEqual(added_count, 4)
+        for y_value in rows:
+            lanes_at_y = [obs["lane"] for obs in env.obstacles if obs["y"] == y_value]
+            self.assertGreaterEqual(len(lanes_at_y), 1)
+            self.assertLessEqual(len(lanes_at_y), 2)
+            self.assertEqual(len(lanes_at_y), len(set(lanes_at_y)))
+
+    def test_random_obstacle_generator_builds_fifty_row_stage(self):
+        generator = RandomObstacleGenerator(
+            start_y=400,
+            gap_y=125,
+            max_rows=50,
+            rng=random.Random(11),
+        )
+        env = CarEnvironment(obstacles_config=[[]], disable_finish=False)
+        env.reset()
+
+        added_count = generator.append_all_obstacles(env)
+        rows = sorted({obs["y"] for obs in env.obstacles})
+
+        self.assertEqual(len(rows), 50)
+        self.assertEqual(rows[0], 400.0)
+        self.assertEqual(rows[-1], 400.0 + (125.0 * 49))
+        self.assertGreaterEqual(added_count, 50)
+        self.assertLessEqual(added_count, 100)
+        self.assertEqual(env.finish_line_y, rows[-1] + FINISH_DISTANCE)
 
     def test_warning_close_count_reports_front_plus_sides(self):
         env = CarEnvironment(obstacles_config=[[]], disable_finish=True)

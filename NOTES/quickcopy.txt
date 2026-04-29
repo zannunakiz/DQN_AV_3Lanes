@@ -42,6 +42,7 @@ python main_visualize.py --allstage --episodes 20
 VISUALIZE MODES
 python main_visualize.py --manual --episodes 3
 python main_visualize.py --experiment
+python main_visualize.py --random  # random 50-set stage
 python main_visualize.py --speedtest
 python main_visualization.py --episodes 5
 
