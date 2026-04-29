@@ -5,6 +5,7 @@ python main_train.py --episodes 500 --seed 123
 
 TRAIN WITH VISUALIZE
 python main_train.py --episodes 200 --visualize
+python main_train.py --episodes 200 --visualize --neuron
 python main_train.py --episodes 200 --visualize --render-every 5
 python main_train.py --episodes 200 --visualize --render-every 10 --save-interval 50
 
@@ -43,6 +44,7 @@ VISUALIZE MODES
 python main_visualize.py --manual --episodes 3
 python main_visualize.py --experiment
 python main_visualize.py --random  # random 50-set stage
+python main_visualize.py --neuron
 python main_visualize.py --speedtest
 python main_visualization.py --episodes 5
 

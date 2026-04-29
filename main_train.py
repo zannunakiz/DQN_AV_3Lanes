@@ -186,6 +186,7 @@ def _train_dqn_cycle(
     renderer=None,
     close_renderer=True,
     plot_results=True,
+    neuron_mode=False,
 ):
     """
     Train the DQN agent with curriculum learning support
@@ -206,7 +207,12 @@ def _train_dqn_cycle(
         renderer: Optional GameRenderer to reuse across cycles
         close_renderer: If True, close renderer at end
         plot_results: If True, generate matplotlib plots at end (if available)
+        neuron_mode: Show neural-network forward-pass details in visualization
     """
+
+    if neuron_mode and not visualize:
+        print("[INFO] --neuron requested; enabling --visualize.")
+        visualize = True
 
 
     if visualize and not pygame_available:
@@ -226,16 +232,17 @@ def _train_dqn_cycle(
 
 
     if visualize:
-        from main_visualize import GameRenderer
+        from main_visualize import GameRenderer, build_neuron_trace
 
         if renderer is None:
 
-            renderer = GameRenderer(env, scale=DEFAULT_SCALE)
+            renderer = GameRenderer(env, scale=DEFAULT_SCALE, neuron_mode=neuron_mode)
             print(
                 "[OK] Visualization enabled - pygame window will show training progress"
             )
         else:
             renderer.env = env
+            renderer.neuron_mode = bool(neuron_mode)
 
     agent = DQNAgent(
         state_size=env.state_size,
@@ -952,12 +959,23 @@ def _train_dqn_cycle(
                     cached_nn_output = agent.get_q_values(state)
                 except Exception:
                     cached_nn_output = None
+                try:
+                    neuron_data = (
+                        build_neuron_trace(agent, state) if neuron_mode else None
+                    )
+                except Exception as e:
+                    neuron_data = {"error": str(e)}
                 render_info = env.render_info()
                 if cached_nn_output is not None:
                     render_info["nn_output"] = cached_nn_output
                 render_info["last_action"] = action
                 renderer.render(
-                    render_info, episode, total_reward, agent.epsilon, steps
+                    render_info,
+                    episode,
+                    total_reward,
+                    agent.epsilon,
+                    steps,
+                    neuron_data=neuron_data,
                 )
 
             if done:
@@ -1280,6 +1298,7 @@ def _train_dqn_cycle(
                     visualize=visualize,
                     verbose=verbose,
                     step_multiplier=valid_multiplier,
+                    neuron_mode=neuron_mode,
                 )
                 if formula:
                     end_tag = f"E{episode}/END"
@@ -1661,6 +1680,7 @@ def train_dqn(
     seed=None,
     memory_size=MEMORY_SIZE,
     continuous=0,
+    neuron_mode=False,
 ):
     """Train DQN once, or continuously in labeled cycles (A, B, C, ...).
 
@@ -1698,6 +1718,7 @@ def train_dqn(
             renderer=None,
             close_renderer=True,
             plot_results=True,
+            neuron_mode=neuron_mode,
         )
         return agent, rewards, success
 
@@ -1756,6 +1777,7 @@ def train_dqn(
                 renderer=renderer,
                 close_renderer=False,
                 plot_results=False,
+                neuron_mode=neuron_mode,
             )
 
             last_agent = agent
@@ -1922,6 +1944,7 @@ def run_independent_test(
     visualize=False,
     verbose=True,
     step_multiplier=1,
+    neuron_mode=False,
 ):
     """
     Run a single INDEPENDENT episode with epsilon=0 and no training.
@@ -1942,10 +1965,13 @@ def run_independent_test(
         visualize: Whether to render the test
         verbose: Whether to print progress
         step_multiplier: Execute multiple env steps per render/loop (like key '1')
+        neuron_mode: Show neural-network forward-pass details in visualization
 
     Returns:
         True if the agent reached the finish line, False otherwise
     """
+    if neuron_mode and visualize:
+        from main_visualize import build_neuron_trace
 
     original_epsilon = agent.epsilon
     agent.epsilon = 0.0
@@ -1994,8 +2020,20 @@ def run_independent_test(
 
 
         if visualize and renderer:
+            try:
+                neuron_data = build_neuron_trace(agent, state) if neuron_mode else None
+            except Exception as e:
+                neuron_data = {"error": str(e)}
             render_info = env.render_info()
-            renderer.render(render_info, 0, 0, 0, steps, paused=False)
+            renderer.render(
+                render_info,
+                0,
+                0,
+                0,
+                steps,
+                paused=False,
+                neuron_data=neuron_data,
+            )
 
     try:
         world_step = int(round(float(getattr(env, "world_distance", 0.0))))
@@ -2458,6 +2496,11 @@ if __name__ == "__main__":
         help="Enable real-time pygame visualization during training",
     )
     parser.add_argument(
+        "--neuron",
+        action="store_true",
+        help="Show detailed neural-network forward-pass panel while training visualization is running",
+    )
+    parser.add_argument(
         "--render-every",
         type=int,
         default=1,
@@ -2581,6 +2624,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    if args.neuron and not args.visualize:
+        print("[INFO] --neuron requested; enabling --visualize.")
+        args.visualize = True
+
     if args.fine_tune_memory:
         exp_dir = fine_tune_memory_size(
             memory_sizes=args.tune_memory_sizes,
@@ -2623,4 +2670,5 @@ if __name__ == "__main__":
         seed=args.seed,
         memory_size=args.memory_size,
         continuous=continuous_val,
+        neuron_mode=args.neuron,
     )

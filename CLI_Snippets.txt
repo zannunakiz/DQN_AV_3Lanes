@@ -1,5 +1,6 @@
 TRAIN NEW MODEL (Training)
 python main_train.py --episodes 5000
+python main_train.py --episodes 5000 --visualize --neuron
 
 RUN MAIN MODEL ON TRAINING STAGE (Evaluasi)
 python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --allstage --episodes 10000 
@@ -12,6 +13,9 @@ python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth -
 
 RUN MAIN MODEL ON RANDOM 50-SET OBSTACLE STAGE
 python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --episodes 10000 --random
+
+RUN MAIN MODEL WITH NEURON TRACE PANEL
+python main_visualize.py --model ALL_MODELS/MAIN-5102EPS/model_stage5-5102.pth --episodes 10000 --neuron
 
 
 NOTE: To change/edit obstacles, edit from main_constant.py 

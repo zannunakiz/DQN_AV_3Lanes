@@ -10,6 +10,7 @@ import os
 import csv
 import re
 import random
+import numpy as np
 
 from main_environment import CarEnvironment, get_num_stages
 from main_dqn_agent import DQNAgent
@@ -82,6 +83,115 @@ LIGHT_BLUE = (173, 216, 230)
 VISUALIZE_LOG_DIR = "visualize_logs"
 VISUALIZE_LOG_BASENAME = "visualize"
 VISUALIZE_LOG_PATTERN = re.compile(r"^visualize-(\d+)\.csv$")
+NEURON_INPUT_NAMES = ["R2", "R1", "F", "L1", "L2", "SR", "SL", "Speed"]
+NEURON_ACTION_NAMES = ["SlowL", "SlowS", "SlowR", "FastL", "FastS", "FastR"]
+
+
+def build_neuron_trace(
+    agent,
+    state,
+    max_neurons_per_hidden_layer=6,
+    max_inputs_per_neuron=8,
+):
+    """Build a compact forward-pass trace from normalized input to Q-values."""
+    state_array = np.asarray(state, dtype=np.float64).reshape(-1)
+    activations = state_array
+    linear_layers = [
+        module
+        for module in agent.policy_net.network
+        if hasattr(module, "weight") and hasattr(module, "bias")
+    ]
+
+    trace_layers = []
+    total_params = 0
+    for layer_index, module in enumerate(linear_layers, start=1):
+        weights = module.weight.detach().cpu().numpy().astype(np.float64, copy=False)
+        bias = module.bias.detach().cpu().numpy().astype(np.float64, copy=False)
+        total_params += int(weights.size + bias.size)
+
+        pre_activation = weights.dot(activations) + bias
+        is_output_layer = layer_index == len(linear_layers)
+        post_activation = (
+            pre_activation
+            if is_output_layer
+            else np.maximum(pre_activation, 0.0)
+        )
+
+        if is_output_layer:
+            selected_indices = list(range(len(pre_activation)))
+        else:
+            ranked_indices = np.argsort(np.abs(post_activation))[::-1]
+            selected_indices = [
+                int(idx) for idx in ranked_indices[: int(max_neurons_per_hidden_layer)]
+            ]
+
+        neuron_rows = []
+        for neuron_index in selected_indices:
+            products = weights[neuron_index] * activations
+            ranked_inputs = np.argsort(np.abs(products))[::-1]
+            contribution_rows = []
+            for input_index in ranked_inputs[: int(max_inputs_per_neuron)]:
+                input_index = int(input_index)
+                input_name = (
+                    NEURON_INPUT_NAMES[input_index]
+                    if layer_index == 1 and input_index < len(NEURON_INPUT_NAMES)
+                    else f"a{layer_index - 1}[{input_index}]"
+                )
+                contribution_rows.append(
+                    {
+                        "input_index": input_index,
+                        "input_name": input_name,
+                        "weight": float(weights[neuron_index, input_index]),
+                        "input": float(activations[input_index]),
+                        "product": float(products[input_index]),
+                    }
+                )
+
+            output_label = (
+                NEURON_ACTION_NAMES[neuron_index]
+                if is_output_layer and neuron_index < len(NEURON_ACTION_NAMES)
+                else f"n{neuron_index}"
+            )
+            neuron_rows.append(
+                {
+                    "index": int(neuron_index),
+                    "label": output_label,
+                    "bias": float(bias[neuron_index]),
+                    "z": float(pre_activation[neuron_index]),
+                    "activation": float(post_activation[neuron_index]),
+                    "contributions": contribution_rows,
+                }
+            )
+
+        trace_layers.append(
+            {
+                "index": int(layer_index),
+                "type": "output" if is_output_layer else "hidden",
+                "input_size": int(weights.shape[1]),
+                "output_size": int(weights.shape[0]),
+                "weight_shape": tuple(int(v) for v in weights.shape),
+                "bias_shape": tuple(int(v) for v in bias.shape),
+                "activation_min": float(np.min(post_activation)),
+                "activation_max": float(np.max(post_activation)),
+                "activation_mean": float(np.mean(post_activation)),
+                "active_count": int(np.sum(post_activation > 0.0))
+                if not is_output_layer
+                else None,
+                "neurons": neuron_rows,
+                "q_values": post_activation.tolist() if is_output_layer else None,
+            }
+        )
+
+        activations = post_activation
+
+    q_values = trace_layers[-1]["q_values"] if trace_layers else []
+    return {
+        "input": state_array.tolist(),
+        "input_names": NEURON_INPUT_NAMES[: len(state_array)],
+        "layers": trace_layers,
+        "q_values": q_values,
+        "total_params": int(total_params),
+    }
 
 
 class RandomObstacleGenerator:
@@ -295,12 +405,19 @@ class ExperimentObstaclePlanner:
 class GameRenderer:
     """Pygame renderer for car environment (single window with 3 sections)."""
 
-    def __init__(self, env, scale=DEFAULT_SCALE, experiment_mode=False):
+    def __init__(
+        self,
+        env,
+        scale=DEFAULT_SCALE,
+        experiment_mode=False,
+        neuron_mode=False,
+    ):
         pygame.init()
 
         self.env = env
         self.scale = scale
         self.experiment_mode = bool(experiment_mode)
+        self.neuron_mode = bool(neuron_mode)
 
 
         self.road_display_width = int(env.road_width * scale)
@@ -314,15 +431,25 @@ class GameRenderer:
         self.info_right_width = 320
         self.info_panel_width = self.info_left_width + self.info_right_width
         self.experiment_panel_width = 360 if self.experiment_mode else 0
+        self.neuron_panel_width = 760 if self.neuron_mode else 0
         self.window_width = (
-            self.road_display_width + self.info_panel_width + self.experiment_panel_width
+            self.road_display_width
+            + self.info_panel_width
+            + self.experiment_panel_width
+            + self.neuron_panel_width
         )
         self.window_height = self.road_display_height
         self.screen = pygame.display.set_mode((self.window_width, self.window_height))
-        if self.experiment_mode:
+        if self.experiment_mode and self.neuron_mode:
+            pygame.display.set_caption(
+                "DQN Car Navigation - Road + Info + Obstacle + Neuron Trace"
+            )
+        elif self.experiment_mode:
             pygame.display.set_caption(
                 "DQN Car Navigation - Road + Info + Obstacle Controls (Experiment)"
             )
+        elif self.neuron_mode:
+            pygame.display.set_caption("DQN Car Navigation - Road + Info + Neuron Trace")
         else:
             pygame.display.set_caption("DQN Car Navigation - Road + Info")
 
@@ -357,6 +484,7 @@ class GameRenderer:
         self.last_timeframe = 0
         self.last_paused = False
         self.last_experiment_data = None
+        self.last_neuron_data = None
         self.experiment_button_rects = {}
 
     def _set_speed_mode(self, mode):
@@ -1034,6 +1162,157 @@ class GameRenderer:
             self.screen.blit(text, (list_rect.x + 8, row_y))
             row_y += row_height
 
+    def draw_neuron_panel(self, neuron_data):
+        """Draw forward-pass neuron details used in --neuron mode."""
+        if not self.neuron_mode:
+            return
+
+        panel_x = (
+            self.road_display_width
+            + self.info_panel_width
+            + self.experiment_panel_width
+        )
+        panel_width = self.neuron_panel_width
+        panel_rect = pygame.Rect(panel_x, 0, panel_width, self.window_height)
+
+        pygame.draw.rect(self.screen, (24, 26, 30), panel_rect)
+        pygame.draw.line(
+            self.screen, WHITE, (panel_x, 0), (panel_x, self.window_height), 2
+        )
+
+        title = self.font_large.render("Neuron Trace", True, WHITE)
+        self.screen.blit(title, (panel_x + 18, 18))
+
+        y = 52
+        line_height = 16
+        max_y = self.window_height - 18
+
+        def _clip_text(text, width, indent=0):
+            max_chars = max(20, (int(width) - 12 - int(indent)) // 7)
+            clipped = str(text)
+            if len(clipped) > max_chars:
+                clipped = clipped[: max_chars - 3] + "..."
+            return clipped
+
+        def draw_line(text, color=WHITE, indent=0):
+            nonlocal y
+            if y > max_y:
+                return
+            clipped = _clip_text(text, panel_width - 30, indent)
+            surface = self.font.render(clipped, True, color)
+            self.screen.blit(surface, (panel_x + 18 + indent, y))
+            y += line_height
+
+        def draw_column_line(text, x, y_pos, width, color=WHITE, indent=0):
+            if y_pos > max_y:
+                return y_pos
+            clipped = _clip_text(text, width, indent)
+            surface = self.font.render(clipped, True, color)
+            self.screen.blit(surface, (x + indent, y_pos))
+            return y_pos + line_height
+
+        if not neuron_data:
+            draw_line("Waiting for first network pass...", YELLOW)
+            return
+        if neuron_data.get("error"):
+            draw_line("Neuron trace error:", RED)
+            draw_line(neuron_data.get("error"), WHITE, 8)
+            return
+
+        total_params = int(neuron_data.get("total_params", 0))
+        draw_line(f"Policy net params: {total_params}", YELLOW)
+        draw_line("Forward: y = W*x + b, hidden uses ReLU", LIGHT_BLUE)
+        y += 4
+
+        layers = neuron_data.get("layers", [])
+        hidden_layers = [
+            layer for layer in layers if str(layer.get("type", "hidden")) != "output"
+        ]
+        output_layers = [
+            layer for layer in layers if str(layer.get("type", "hidden")) == "output"
+        ]
+
+        draw_line("-- Layers (top active neurons) --", YELLOW)
+        column_top = y
+        column_gap = 18
+        column_width = (panel_width - 36 - column_gap) // 2
+        left_x = panel_x + 18
+        right_x = left_x + column_width + column_gap
+        pygame.draw.line(
+            self.screen,
+            (80, 80, 80),
+            (right_x - 9, column_top),
+            (right_x - 9, self.window_height - 18),
+            1,
+        )
+
+        def draw_layer_column(column_layers, x, start_y, width, title):
+            y_col = start_y
+            y_col = draw_column_line(title, x, y_col, width, YELLOW)
+            for layer in column_layers:
+                layer_index = int(layer.get("index", 0))
+                layer_kind = layer.get("type", "hidden")
+                in_size = int(layer.get("input_size", 0))
+                out_size = int(layer.get("output_size", 0))
+                active_count = layer.get("active_count", None)
+                active_text = (
+                    f", active={int(active_count)}/{out_size}"
+                    if active_count is not None
+                    else ""
+                )
+                y_col = draw_column_line(
+                    f"L{layer_index} {layer_kind}: {in_size}->{out_size}{active_text}",
+                    x,
+                    y_col,
+                    width,
+                    LIGHT_BLUE,
+                )
+                y_col = draw_column_line(
+                    "a min/mean/max = "
+                    f"{float(layer.get('activation_min', 0.0)):+.4f} / "
+                    f"{float(layer.get('activation_mean', 0.0)):+.4f} / "
+                    f"{float(layer.get('activation_max', 0.0)):+.4f}",
+                    x,
+                    y_col,
+                    width,
+                    WHITE,
+                    8,
+                )
+
+                neurons = layer.get("neurons", [])
+                max_neurons_to_draw = 6 if layer_kind == "output" else 2
+                for neuron in neurons[:max_neurons_to_draw]:
+                    y_col = draw_column_line(
+                        f"{neuron.get('label')} "
+                        f"b={float(neuron.get('bias', 0.0)):+.4f} "
+                        f"z={float(neuron.get('z', 0.0)):+.4f} "
+                        f"a={float(neuron.get('activation', 0.0)):+.4f}",
+                        x,
+                        y_col,
+                        width,
+                        WHITE,
+                        8,
+                    )
+                    for contrib in neuron.get("contributions", [])[:2]:
+                        y_col = draw_column_line(
+                            f"{contrib.get('input_name')} "
+                            f"w={float(contrib.get('weight', 0.0)):+.4f} "
+                            f"in={float(contrib.get('input', 0.0)):+.4f} "
+                            f"prod={float(contrib.get('product', 0.0)):+.4f}",
+                            x,
+                            y_col,
+                            width,
+                            GRAY,
+                            20,
+                        )
+                y_col += 4
+                if y_col > max_y:
+                    break
+            return y_col
+
+        draw_layer_column(hidden_layers, left_x, column_top, column_width, "Hidden")
+        draw_layer_column(output_layers, right_x, column_top, column_width, "Output")
+
     def _get_sensor_color(
         self, distance, normalized=None, is_front_sensor=False, is_side_sensor=False
     ):
@@ -1061,6 +1340,7 @@ class GameRenderer:
         timeframe=0,
         paused=False,
         experiment_data=None,
+        neuron_data=None,
     ):
         """Render the entire scene"""
 
@@ -1071,6 +1351,7 @@ class GameRenderer:
         self.last_timeframe = timeframe
         self.last_paused = paused
         self.last_experiment_data = experiment_data
+        self.last_neuron_data = neuron_data
 
         self.screen.fill(BLACK)
 
@@ -1108,6 +1389,7 @@ class GameRenderer:
             info, episode, total_reward, epsilon, fps, timeframe, paused
         )
         self.draw_experiment_panel(experiment_data)
+        self.draw_neuron_panel(neuron_data)
 
         pygame.display.flip()
 
@@ -1125,6 +1407,7 @@ class GameRenderer:
                 self.last_timeframe,
                 self.last_paused if paused is None else paused,
                 self.last_experiment_data,
+                self.last_neuron_data,
             )
 
     def handle_events(self, paused=False):
@@ -1205,6 +1488,7 @@ def run_visualization(
     tester=False,
     experiment=False,
     random_mode=False,
+    neuron_mode=False,
 ):
     """Run visualization with trained model or manual control"""
     experiment_mode = bool(experiment)
@@ -1259,7 +1543,12 @@ def run_visualization(
         print("No model loaded, using random actions or manual control")
         agent.epsilon = 0.0
 
-    renderer = GameRenderer(env, scale=DEFAULT_SCALE, experiment_mode=experiment_mode)
+    renderer = GameRenderer(
+        env,
+        scale=DEFAULT_SCALE,
+        experiment_mode=experiment_mode,
+        neuron_mode=neuron_mode,
+    )
     planner = ExperimentObstaclePlanner() if experiment_mode else None
     random_generator = RandomObstacleGenerator() if random_mode else None
     visualize_csv_path = get_next_visualize_csv_path()
@@ -1285,6 +1574,8 @@ def run_visualization(
         )
     else:
         print(f"Obstacle source: {'TEST_OBSTACLES' if tester else 'OBSTACLES'}")
+    if neuron_mode:
+        print("Neuron trace: ON (normalized input, hidden activations, weights/bias, Q)")
     print("=" * 30)
 
     episode = 0
@@ -1330,6 +1621,7 @@ def run_visualization(
         step_count = 0
         action = 4 if manual_mode else 1
         nn_output = None
+        neuron_data = None
 
 
         current_vis_action = action
@@ -1388,6 +1680,7 @@ def run_visualization(
                     step_count,
                     paused=True,
                     experiment_data=planner.snapshot() if planner else None,
+                    neuron_data=neuron_data,
                 )
                 continue
 
@@ -1434,6 +1727,10 @@ def run_visualization(
                 nn_output = agent.get_q_values(state)
             except Exception:
                 nn_output = None
+            try:
+                neuron_data = build_neuron_trace(agent, state) if neuron_mode else None
+            except Exception as e:
+                neuron_data = {"error": str(e)}
 
             render_info = env.render_info()
             if nn_output is not None:
@@ -1447,6 +1744,7 @@ def run_visualization(
                 step_count,
                 paused,
                 planner.snapshot() if planner else None,
+                neuron_data,
             )
 
         if done:
@@ -1697,6 +1995,11 @@ if __name__ == "__main__":
         help="Enable finite random obstacles (startRandom/gapRandom/maxRandom, 1-2 vehicles per row)",
     )
     parser.add_argument(
+        "--neuron",
+        action="store_true",
+        help="Show detailed neural-network forward-pass panel (input, weights, bias, hidden activations, Q-values)",
+    )
+    parser.add_argument(
         "--speedtest",
         action="store_true",
         help="Run endless speed test (Up/Down queue fast/slow straight decisions at interval boundaries)",
@@ -1715,4 +2018,5 @@ if __name__ == "__main__":
             tester=args.tester,
             experiment=args.experiment,
             random_mode=args.random,
+            neuron_mode=args.neuron,
         )

@@ -9,9 +9,11 @@ from main_constant import (
     OBSTACLE_WARNING_DISTANCE_SIDES,
 )
 from main_environment import CarEnvironment
+from main_dqn_agent import DQNAgent
 from main_visualize import (
     ExperimentObstaclePlanner,
     RandomObstacleGenerator,
+    build_neuron_trace,
     build_visualize_episode_row,
     get_next_visualize_csv_path,
 )
@@ -121,6 +123,29 @@ class TestVisualizeCore(unittest.TestCase):
         self.assertGreaterEqual(added_count, 50)
         self.assertLessEqual(added_count, 100)
         self.assertEqual(env.finish_line_y, rows[-1] + FINISH_DISTANCE)
+
+    def test_build_neuron_trace_reports_layer_shapes_and_q_values(self):
+        env = CarEnvironment(obstacles_config=[[]], disable_finish=True)
+        state = env.reset()
+        agent = DQNAgent(env.state_size, env.action_size, memory_size=10)
+
+        trace = build_neuron_trace(
+            agent,
+            state,
+            max_neurons_per_hidden_layer=2,
+            max_inputs_per_neuron=3,
+        )
+
+        self.assertEqual(len(trace["input"]), env.state_size)
+        self.assertEqual(len(trace["layers"]), 4)
+        self.assertEqual(len(trace["q_values"]), env.action_size)
+        self.assertEqual(trace["layers"][0]["input_size"], env.state_size)
+        self.assertEqual(trace["layers"][-1]["output_size"], env.action_size)
+        self.assertGreater(trace["total_params"], 0)
+        for layer in trace["layers"][:-1]:
+            self.assertLessEqual(len(layer["neurons"]), 2)
+            for neuron in layer["neurons"]:
+                self.assertLessEqual(len(neuron["contributions"]), 3)
 
     def test_warning_close_count_reports_front_plus_sides(self):
         env = CarEnvironment(obstacles_config=[[]], disable_finish=True)
