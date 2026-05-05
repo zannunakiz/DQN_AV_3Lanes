@@ -74,10 +74,9 @@ class ReplayBuffer:
             np.array(dones, dtype=np.float32),
             np.array(discounts, dtype=np.float32),
         )
-
+        
     def __len__(self):
         return len(self.buffer)
-
 
 class DQNAgent:
     """DQN agent with replay buffer and target network."""
